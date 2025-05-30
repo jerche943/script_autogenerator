@@ -1,0 +1,5 @@
+G3 L FAST
+X8_472 P SLOW
+T73 YES and NO AUTO_TRK
+P81_jam_code_type_ON
+LT_jam_code_type_OFF
