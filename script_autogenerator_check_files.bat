@@ -6,8 +6,8 @@ rem make output file compliant with batch file naming conventions
 rem Initialize the weekend_or_weekday variable
 set "weekend_or_weekday="
 
-rem Get the current date in the format YYYYMMDDHHMMSS
-for /f "tokens=1 delims=." %%a in ('wmic os get localdatetime ^| find "."') do set datetime=%%a
+rem Get the current date in the format YYYYMMDDHHMMSS using PowerShell
+for /f %%a in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMddHHmmss"') do set datetime=%%a
 
 rem Extract the date components
 set year=%datetime:~0,4%
@@ -28,7 +28,7 @@ set /a K=%year% %% 100
 set /a J=%year% / 100
 
 :: Zeller's Congruence formula to calculate the day of the week
-set /a f=%day% + ((13 * (%month% + 1)) / 5) + %K% + (%K% / 4) + (%J% / 4) - (2 * %J%)
+set /a f=%day% + (13 * (%month% + 1) / 5) + %K% + (%K% / 4) + (%J% / 4) - (2 * %J%)
 set /a f=(f %% 7 + 7) %% 7
 
 :: Map the result to the day of the week
@@ -79,8 +79,8 @@ REM Check if the file exists
 if exist "%filePath%" (
     echo The file exists. Processing contents...
 
-    REM Create or clear the output file
-    > "%outputFilePath%" echo.
+    REM Ensure the output file is completely cleared (no blank first line)
+	if exist "%outputFilePath%" del "%outputFilePath%"
 
     REM Read and process the contents of the file line by line assuming it is formatted like so: R15 M and P AUTO or R15 P OFF
     for /f "delims=" %%a in (%filePath%) do (
@@ -90,13 +90,17 @@ if exist "%filePath%" (
 		
 		set "noSpaces=!line: =!"
 		
-		echo # !line! >> "%outputFilePath%"
 		
-		if /i "%add_phase%"=="y" (
-			echo !phase! >> "%outputFilePath%"
-		)
         
+rem		echo !line! | find " " >nul
+		
         if not "!line!"=="!noSpaces!" (
+		
+			>> "%outputFilePath%" echo # !line!
+		
+			if /i "%add_phase%"=="y" (
+				>> "%outputFilePath%" echo !phase!
+			)
 
             REM The line contains a space
             set "output=D:\QA_Tools\Automation\Modules\ScenarioTests\Traj\FQT\"
@@ -119,38 +123,69 @@ if exist "%filePath%" (
             if "!index!"=="3" (
                 set "text_file=!array[1]!_jam_!array[2]!_NA_!array[3]!.txt"
                 set "output=!output!!scenario!!text_file!"
-                echo !output! >> "%outputFilePath%"
+                >> "%outputFilePath%" echo !output!
 				echo. >> "%outputFilePath%"
             ) else (
-                REM Do M or P first depending on order
+                REM Do code type first depending on order
                 set "text_file=!array[1]!_jam_!array[2]!_NA_!array[5]!.txt"
                 set "output=!output!!scenario!!text_file!"
-                echo !output! >> "%outputFilePath%"
+                >> "%outputFilePath%" echo !output!
                 if /i "%add_phase%"=="y" (
-					echo !phase! >> "%outputFilePath%"
+					>> "%outputFilePath%" echo !phase!
 				)
 				
                 REM Do M or P second depending on order
                 set "text_file=!array[1]!_jam_!array[4]!_NA_!array[5]!.txt"
                 set "output=!second_output!!scenario!!text_file!"
-                echo !output! >> "%outputFilePath%"
+                >> "%outputFilePath%" echo !output!
 				echo. >> "%outputFilePath%"
             )
         ) else (
 			
-            REM The line does not contain a space assuming format: R1_BC_HS_J_M_NA_AUTO
+			
+            REM The line does not contain a space 
            
 			set "no_space_output=D:\QA_Tools\Automation\Modules\ScenarioTests\Traj\FQT\"
             set "no_space_text_file=!line!.txt"
 			
-			rem get scenario
-			for /f "tokens=1 delims=_jam_code_type_NA" %%b in ("!line!") do (
-				set "no_space_scenario=%%b\Jam\"
+			rem Replace the delimiter with something unique
+			set "marked_line=!line:_jam_=<!"
+			set "fully_marked_line=!marked_line:_type_=<!"
+
+			rem Get the part BEFORE the <
+			for /f "tokens=1 delims=<" %%a in ("!marked_line!") do (
+			
+				set "no_space_scenario=%%a\Jam\"
+			)
+
+			for /f "tokens=1 delims=\" %%b in ("!no_space_scenario!") do (
+			
+				set "scenario_part=%%b"
 			)
 			
+			set "scenario_part=!scenario_part:_= !"
+			
+			rem WORK ONNNN
+			for /f "tokens=2 delims=<" %%d in ("!fully_marked_line!") do (
+			
+				set "code_type=%%d"
+			)
+			
+			for /f "tokens=3 delims=<" %%f in ("!fully_marked_line!") do (
+			
+				set "run_type=%%f"
+			)
+			
+			set comment_line=!scenario_part! !code_type! !run_type!
+		
 			set "no_space_output=!no_space_output!!no_space_scenario!!no_space_text_file!"
 			
-			echo !no_space_output! >> "%outputFilePath%"
+			>> "%outputFilePath%" echo # !comment_line!
+		
+			if /i "%add_phase%"=="y" (
+				>> "%outputFilePath%" echo !phase!
+			)
+			>> "%outputFilePath%" echo !no_space_output!
 			echo. >> "%outputFilePath%"
         )
     )
